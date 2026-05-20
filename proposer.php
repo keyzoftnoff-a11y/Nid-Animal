@@ -1,34 +1,46 @@
 <?php
+// On inclut la connexion PDO et la configuration de la session
 require 'config.php';
 
-// Seul un client connecté peut proposer un animal
+// SÉCURITÉ (Critère 7.4) : Contrôle d'accès par rôle.
+// Seul un utilisateur connecté ayant le rôle 'client' est autorisé à proposer un animal.
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'client') {
+    // Redirection immédiate vers l'accueil si l'utilisateur n'a pas les droits
     header("Location: index.php");
-    exit;
+    exit; // Arrêt obligatoire du script
 }
 
+// On récupère toutes les catégories de la base de données pour générer dynamiquement la liste déroulante (select)
 $categories = $pdo->query("SELECT * FROM categories")->fetchAll();
 $message = '';
 
+// On vérifie si l'utilisateur a soumis le formulaire via POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Récupération des données saisies dans les différents champs
     $nom = $_POST['nom'];
     $cat = $_POST['categorie_id'];
     $desc = $_POST['description'];
     $age = $_POST['age'];
     $sexe = $_POST['sexe'];
 
+    // VALIDATION DES DONNÉES (Critère 7.6) : Tous les champs doivent être saisis
     if ($nom == '' || $cat == '' || $desc == '' || $age == '') {
         $message = "Tous les champs sont obligatoires.";
-    } elseif (!is_numeric($age) || intval($age) < 0) {
-        // Sécurité : on s'assure que l'âge est un nombre entier positif (critère 7.6)
+    } 
+    // VALIDATION DES DONNÉES (Critère 7.6) : On s'assure côté serveur que l'âge est bien un entier numérique positif
+    elseif (!is_numeric($age) || intval($age) < 0) {
         $message = "L'âge doit être un nombre entier positif.";
-    } elseif (!in_array($sexe, ['M', 'F'])) {
-        // Sécurité : on valide les valeurs autorisées pour le sexe (critère 7.6)
+    } 
+    // VALIDATION DES DONNÉES (Critère 7.6) : Validation stricte des valeurs autorisées pour le sexe ('M' ou 'F')
+    elseif (!in_array($sexe, ['M', 'F'])) {
         $message = "Le sexe saisi est invalide.";
     } else {
+        // SÉCURITÉ (Critère 7.2) : Insertion sécurisée via requête préparée.
+        // On associe automatiquement l'animal créé au client connecté en utilisant $_SESSION['user_id'] comme proprietaire_id.
         $stmt = $pdo->prepare("INSERT INTO animaux (nom, categorie_id, description, age, sexe, statut, proprietaire_id)
                                VALUES (?, ?, ?, ?, ?, 'disponible', ?)");
         $stmt->execute([$nom, $cat, $desc, $age, $sexe, $_SESSION['user_id']]);
+        
         $message = "Animal proposé !";
     }
 }

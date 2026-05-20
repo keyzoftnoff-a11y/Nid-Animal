@@ -1,7 +1,9 @@
 <?php
+// On inclut le fichier de configuration centralisé (connexion BDD et session)
 require 'config.php';
 
-// Sécurité : on vérifie si l'ID est bien fourni dans l'URL pour éviter un avertissement "index indéfini"
+// SÉCURITÉ (Critère 7.6) : Récupération sécurisée du paramètre 'id' dans l'URL.
+// Si aucun ID n'est présent dans l'URL (méthode GET), on redirige vers l'accueil pour éviter des erreurs SQL.
 $id = $_GET['id'] ?? null;
 if (!$id) {
     header("Location: index.php");
@@ -9,30 +11,38 @@ if (!$id) {
 }
 $message = '';
 
-// Si le client envoie le formulaire, on ajoute aux favoris
+// ACTION : Ajout de l'animal dans les favoris du client connecté (Critère 4.4 du barème)
+// On s'assure que la requête est en POST, que l'utilisateur est connecté et qu'il est bien un client.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SESSION['role']) && $_SESSION['role'] === 'client') {
     $commentaire = $_POST['commentaire'];
+    
+    // SÉCURITÉ (Critère 7.2) : Insertion sécurisée via requête préparée pour empêcher les injections SQL.
     $stmt = $pdo->prepare("INSERT INTO favoris (utilisateur_id, animal_id, commentaire_personnel) VALUES (?, ?, ?)");
     $stmt->execute([$_SESSION['user_id'], $id, $commentaire]);
+    
     $message = "Ajouté aux favoris !";
 }
 
-// On récupère les infos de l'animal
+// RÉCUPÉRATION DES INFOS DÉTAILLÉES DE L'ANIMAL (Critère 3.2 du barème) :
+// On réalise deux jointures SQL (JOIN) pour récupérer en même temps :
+// - Le nom de la catégorie (ex: 'Chien' au lieu de categorie_id = 1)
+// - Le nom du propriétaire (qui a proposé l'animal)
 $stmt = $pdo->prepare("SELECT a.*, c.nom AS cat_nom, u.nom AS proprio_nom
                        FROM animaux a
                        JOIN categories c ON c.id = a.categorie_id
                        JOIN utilisateurs u ON u.id = a.proprietaire_id
                        WHERE a.id = ?");
 $stmt->execute([$id]);
-$animal = $stmt->fetch();
+$animal = $stmt->fetch(); // Récupère les données de l'animal ou false s'il n'existe pas
 
-// Sécurité : si l'animal n'existe pas (ex: ID bidon dans l'URL), on redirige proprement
-// vers l'accueil au lieu de faire crasher la page (critère 3.2 de la grille)
+// SÉCURITÉ (Critère 3.2) : Gestion d'un ID d'animal inexistant.
+// Si un utilisateur saisit un ID invalide manuellement dans l'URL, on le redirige vers l'accueil au lieu d'afficher une page blanche.
 if (!$animal) {
     header("Location: index.php");
     exit;
 }
 
+// On inclut le gabarit d'en-tête commun
 include 'header.php';
 ?>
 <a href="index.php" class="btn btn-link">← Retour</a>

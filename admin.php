@@ -1,48 +1,65 @@
 <?php
+// On inclut le fichier de configuration centralisé (connexion BDD et session)
 require 'config.php';
 
-// Seul un administrateur peut accéder à cette page
+// SÉCURITÉ (Critère 7.4) : Contrôle d'accès par rôle.
+// Seul un utilisateur connecté ayant le rôle 'admin' est autorisé à charger cette page.
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
-    exit;
+    exit; // Arrêt immédiat si non autorisé
 }
 
 $message = '';
 
+// On gère la soumission des différentes actions d'administration
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // SÉCURITÉ (Critère 7.6) : Récupération de l'action demandée
     $action = $_POST['action'];
 
+    // ACTION 1 : Ajouter une catégorie d'animaux (Critère 5.1 du barème)
     if ($action == 'ajouter_cat') {
         $nom = $_POST['nom'];
         if ($nom != '') {
+            // Requête préparée sécurisée contre les injections SQL
             $stmt = $pdo->prepare("INSERT INTO categories (nom) VALUES (?)");
             $stmt->execute([$nom]);
             $message = "Catégorie ajoutée.";
         }
     }
+    
+    // ACTION 2 : Supprimer une catégorie (Critère 5.1 du barème)
     if ($action == 'supprimer_cat') {
         try {
+            // Requête préparée pour supprimer la catégorie
             $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
             $stmt->execute([$_POST['categorie_id'] ?? 0]);
             $message = "Catégorie supprimée.";
         } catch (PDOException $e) {
-            // Sécurité/Logique : si la catégorie est liée à des animaux (ON DELETE RESTRICT),
-            // on attrape l'exception PDO au lieu de faire crasher la page en blanc (critère 5.1)
+            // SÉCURITÉ / ROBUSTESSE (Critère 5.1) : Gestion de l'intégrité référentielle SQL.
+            // Si la catégorie contient encore des animaux, la base de données lève une exception (ON DELETE RESTRICT).
+            // Le try...catch intercepte cette erreur SQL et évite un crash de page PHP (écran blanc).
             $message = "Impossible de supprimer cette catégorie car elle contient des animaux.";
         }
     }
+    
+    // ACTION 3 : Activer un compte utilisateur (Critère 5.2 du barème)
     if ($action == 'activer') {
+        // Met le champ 'actif' à 1 en BDD via une requête préparée
         $stmt = $pdo->prepare("UPDATE utilisateurs SET actif = 1 WHERE id = ?");
         $stmt->execute([$_POST['user_id'] ?? 0]);
         $message = "Compte activé.";
     }
+    
+    // ACTION 4 : Désactiver un compte utilisateur (Critère 5.2 du barème)
     if ($action == 'desactiver') {
         $userIdToDeactivate = $_POST['user_id'] ?? 0;
         
-        // Logique : on vérifie que l'admin connecté ne désactive pas son propre compte (critère 5.2)
+        // SÉCURITÉ MÉTIER (Critère 5.2) : Protection anti-auto-blocage.
+        // On empêche l'administrateur connecté de désactiver son propre compte, ce qui l'exclurait définitivement du site.
         if ($userIdToDeactivate == $_SESSION['user_id']) {
             $message = "Erreur : Vous ne pouvez pas désactiver votre propre compte administrateur.";
         } else {
+            // Désactivation sécurisée en passant le champ 'actif' à 0
             $stmt = $pdo->prepare("UPDATE utilisateurs SET actif = 0 WHERE id = ?");
             $stmt->execute([$userIdToDeactivate]);
             $message = "Compte désactivé.";

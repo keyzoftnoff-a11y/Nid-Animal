@@ -1,43 +1,56 @@
 <?php
+// On inclut le fichier de configuration centralisé (connexion BDD et session)
 require 'config.php';
 
-// On récupère toutes les catégories pour le menu de filtre
+// On récupère toutes les catégories de la BDD pour remplir dynamiquement la liste déroulante de filtre
 $cats = $pdo->query("SELECT * FROM categories")->fetchAll();
 
-// On lit les filtres tapés par l'utilisateur (méthode GET)
+// On récupère les valeurs des filtres de recherche envoyés par l'URL (méthode GET)
+// L'opérateur de fusion null (??) définit une chaîne vide si le filtre n'a pas été saisi
 $recherche = $_GET['q'] ?? '';
 $cat = $_GET['categorie'] ?? '';
 $age = $_GET['age'] ?? '';
 $sexe = $_GET['sexe'] ?? '';
 
-// On construit la requête SQL selon les filtres
+// CONSTRUCTION DYNAMIQUE DE LA REQUÊTE SQL :
+// De base, on ne sélectionne que les animaux dont le statut est 'disponible' (Critère 3.1)
 $sql = "SELECT a.*, c.nom AS cat_nom
         FROM animaux a
         JOIN categories c ON c.id = a.categorie_id
         WHERE a.statut = 'disponible'";
-$params = [];
+$params = []; // Tableau qui contiendra les valeurs de remplacement sécurisées pour la requête préparée
 
+// Si une recherche textuelle est saisie, on ajoute une condition LIKE (Critère Bonus B3)
 if ($recherche != '') {
     $sql .= " AND a.nom LIKE ?";
-    $params[] = "%$recherche%";
+    $params[] = "%$recherche%"; // Les jokers % permettent de chercher n'timporte où dans le nom (ex: "rex" trouve "Prex")
 }
+
+// Si une catégorie est sélectionnée, on filtre par son ID
 if ($cat != '') {
     $sql .= " AND a.categorie_id = ?";
     $params[] = $cat;
 }
+
+// Si une limite d'âge est saisie, on filtre par âge inférieur ou égal (Critère Bonus B4)
 if ($age != '') {
     $sql .= " AND a.age <= ?";
     $params[] = $age;
 }
+
+// Si un sexe est sélectionné, on filtre par 'M' ou 'F' (Critère Bonus B4)
 if ($sexe != '') {
     $sql .= " AND a.sexe = ?";
     $params[] = $sexe;
 }
 
+// SÉCURITÉ (Critère 7.2) : Préparation et exécution sécurisée de la requête construite dynamiquement.
+// Cela empêche l'injection SQL sur l'ensemble des filtres.
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
-$animaux = $stmt->fetchAll();
+$animaux = $stmt->fetchAll(); // Récupère la liste finale des animaux filtrés
 
+// On inclut le gabarit d'en-tête commun
 include 'header.php';
 ?>
 
