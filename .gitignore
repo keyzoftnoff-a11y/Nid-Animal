@@ -1,0 +1,16 @@
+# Fichiers temporaires et logs
+*.log
+.system_generated/
+
+# Configuration d'éditeur
+.vscode/
+.idea/
+.DS_Store
+
+# Fichiers spécifiques au système Gemini / Antigravity
+.gemini/
+evaluation_note.md
+review_report.md
+task.md
+walkthrough.md
+implementation_plan.md
